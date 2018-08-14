@@ -1,0 +1,564 @@
+---
+title: "STAT151a Final Project"
+author: "Amanda Wu"
+date: "Apr 28, 2018"
+output:
+  pdf_document: default
+  html_document:
+    fig_height: 8
+    fig_width: 10
+---
+<!-- Don't edit in between this line and the one below -->
+```{r include=FALSE}
+# Don't delete this chunk if you are using the DataComputing package
+library(DataComputing)
+library(faraway)
+library(tidyr)
+library(car)
+library(corrplot)
+library(caret)
+
+```
+*Source file* 
+```{r, results='asis', echo=FALSE}
+includeSourceDocuments()
+```
+<!-- Don't edit the material above this line -->
+
+#########################
+## Loading data 
+#########################
+The dataset contains information on forest fire data from the Montesinho natural park in northeast Portugal. The data were collected from January 2000 to December 2003 and there are 517 observations of 13 variables,
+```{r}
+## reading data into R
+data = read.table("~/Desktop/forestfires.csv", header=TRUE, sep=",")
+## double checking to see if the variables match with the descriptions given to us
+head(data)
+area = data$area
+
+## Check to see if any missing data points are spotted 
+## and just get a general view of the data i'm working with
+summary(data)
+
+```
+
+
+#############################
+## Explanatory Data Analysis 
+#############################
+Before jumping into the analysis, I want to understand all the variables graphically. Specifically, I want to understanding the distribution of all the independent variables (predictors), as well as their relationships to each other (such as their correlations), which lead me to do a univariate analysis and a bivariate analysis.
+
+The following plots are drawn to help me visualize their bahavior:   
+  1) Box plot: to help me check for any outlier observations  
+  2) Density plot: to help me see the distribution of the variable, and ideally I would prefer a bell shaped curve.  
+  3) Scatter plot (correlation plot): to help me visualize the linear relationship between the predictor and the response as well as whether the covariates are collinear with each other.  
+
+#### Univariate Analysis
+##### Categorical Data
+```{r}
+par(mfrow = c(4, 2))
+par(mar = c(2,2,2,2))
+## All the variables in this chunk are treated as categorical by me
+## from the boxplots generated on the left, I spot many outliers that squish the data to the baseline 
+## I then got rid of the outliers to see if there's any obvious pattern to the data on the right
+
+boxplot(area ~ data$month, data = data, main ="area by month", xlab = "Month", ylab = "area")
+boxplot(area ~ data$month, data = data, main ="area by month without outliers", xlab = "Month", ylab = "area", outline = FALSE)
+
+
+boxplot(area ~ data$X, data = data, main ="area by x coordinate", xlab = "x coordinate", ylab = "area")
+boxplot(area ~ data$X, data = data, main ="area by x coordinate without outliers", xlab = "x coordinate", ylab = "area", outline = FALSE)
+
+
+boxplot(area ~ data$Y, data = data, main ="area by y coordinate", xlab = "y coordinate", ylab = "area")
+boxplot(area ~ data$Y, data = data, main ="area by y coordinate without outliers", xlab = "y coordinate", ylab = "area", outline = FALSE)
+
+
+boxplot(area ~ data$day, data = data, main ="area by day", xlab = "day", ylab = "area")
+boxplot(area ~ data$day, data = data, main ="area by day without outliers", xlab = "day", ylab = "area", outline = FALSE)
+
+```
+Overall, I don't spot any obvious pattern with each categorial data based on the distribution by their subcategories. Although, interestingly, I noticed that the fire area centered around  y coordinate = 8 is significantly larger than the rest of the data points. Generally speaking, I think this is good for now, if I need more information, I will come back later.   
+
+
+##### More boxplots side by side
+```{r}
+par(mfrow = c(2, 2))
+par(mar = c(2,2,2,2))
+
+## Now, lets move on to our continuous variables 
+fwi = data[,c(5:8)]
+weather = data[, c(9:12)]
+
+boxplot(fwi, main = "FWI data distribution")
+boxplot(fwi, main = "FWI data distribution", outline = FALSE)
+boxplot(weather, main = "Weather data distribution")
+boxplot(weather, main = "Weather data distribution", outline = FALSE)
+```
+The boxplot distributions shown above are very interesting. First of all I immediately spot many outliers in all of the variables here, which I will go into detail later. And even after I got rid of all the outliers, the the spread of DC is still very wide with DMC being the second widest within the FWI dataset, while the spread of FFMC and ISI stay very concentrated to its median. I might have to think about the transformation of data based on what I observe later one by one. Next, similarly, the weather data also show a wide spread in RH(humidity) and relatively wide spread in temperature, while wind and rain (exp rain) are concentrated towards their median.  
+
+
+##### FWI Data in detail
+```{r}
+par(mfrow = c(4, 3))
+par(mar = c(2,2,2,2))
+
+## Now, lets get a even closer look on FWI variables' distribution through their density plots 
+
+boxplot(data$FFMC, data = data, main ="FFMC") #outliers
+boxplot(data$FFMC, data = data, main ="FFMC without outliers", outline = FALSE)
+plot(density(data$FFMC), main = "FFMC")
+
+boxplot(data$DMC, data = data, main ="DMC") #outliers
+boxplot(data$DMC, data = data, main ="DMC without outliers", outline = FALSE)
+plot(density(data$DMC), main = "DMC")
+
+boxplot(data$DC, data = data, main ="DC") #outliers
+boxplot(data$DC, data = data, main ="DC without outliers", outline = FALSE)
+plot(density(data$DC), main = "DC")
+
+boxplot(data$ISI, data = data, main ="ISI") #outliers
+boxplot(data$ISI, data = data, main ="ISI without outliers", outline = FALSE)
+plot(density(data$ISI), main = "ISI")
+```
+Overall, like what I have expected, all 4 of the variables show very skewed distribution. Specifically, FFMC is left skewed with a long tail, DMC is somewhat right skewed, DC is somewhat left skewed with a dip in the middle of the data, and lastly, ISI is pretty right skewed with a long tail on the right. Based on what we have learned in chapter 4, and transformation might be needed for all these data.  
+
+
+##### Weather data in detail
+```{r}
+par(mfrow = c(4, 3))
+par(mar = c(2,2,2,2))
+
+## lets continue to take a closer look on weather variables' distribution through their density plots 
+
+boxplot(data$temp, data = data, main ="Temperature")
+boxplot(data$temp, data = data, main ="Temperature without outliers", outline = FALSE)
+plot(density(data$temp), main ="Temperature")
+
+
+boxplot(data$RH, data = data, main ="Humidity") #outliers
+boxplot(data$RH, data = data, main ="Humidity without outliers", outline = FALSE)
+plot(density(data$RH), main = "Humidity")
+
+boxplot(data$wind, data = data, main ="Wind")
+boxplot(data$wind, data = data, main ="Wind without outliers", outline = FALSE)
+plot(density(data$wind), main = "Wind")
+
+boxplot(data$rain, data = data, main ="Rain") #outliers
+boxplot(data$rain, data = data, main ="Rain without outliers", outline = FALSE)
+plot(density(data$rain), main = "Rain")
+```
+Ok, now I am looking at weather variables. Good that they are not as bad. Both temperature and Wind distribution are relatively bell curved, whereas humidity is a little right skewed and rain is extremely right skewed centered around 0 with a super long tail. Again, transformation might be applied to those skewed data as I investigate more.
+
+
+##### Response variable in detail
+```{r}
+par(mfrow = c(1, 3))
+par(mar = c(2,2,2,2))
+
+## Ok enough with our explanatory variables
+## lets now get a look at our response variable y, which is the area of the fires
+boxplot(area, main = "area") #outliers
+boxplot(area, main = "area", outline = FALSE)
+plot(density(area), main = "Area")
+```
+Sadly, from the density plot above, I spot an extremely right skewed distribution centered around 0. With that being said, we will definitely need to tranform our response variable. Based on the transformation rule we learned in the beginning of the semester, I decide to use a log. However, I remember I also need to make sure that our transformed y is interpretable, so its logged result cannot be less than 0. Addtionally, as our y variable has a lot of dat points centered around 0, so if I just log(0), it would gives errors since it's negative infinity. Therefore, I tranformed it as log(area + 1).  
+
+##### y-transformation
+```{r}
+par(mfrow = c(1, 3))
+par(mar = c(2,2,2,2))
+
+## now lets take a look at our transformed y 
+## and see if it actually helps with the skewed distribution 
+boxplot(log(area + 1), main = "log(area + 1)")
+boxplot(log(area + 1), main = "log(area + 1)", outline = FALSE)
+data$area <- log(data$area + 1)
+plot(density(data$area), main = "log(area + 1)")
+
+```
+It seems like it did help with the skewness, (I also tried other log transformation, but none of them look as nice as this one, so I will go with this one) , and it does look somewhat bell-curved, though it is still a little skewed to the right, we can ignore it for now.  
+
+
+
+Overall, I transformed y to achieve approximate symmetry and homoscedasticity of the residuals. Transformations of the independent variables have a different purpose: after all, in this regression all the independent variables are taken as fixed like we did in class, not random, so "normality" is inapplicable. The independent variables don't need to be normally distributed. The real issue with transforming the independent variables is whether the effect is linear. Thus, I decided to leave them as they are, which can also be more easy to interpret later for our model.
+
+The main objective in these transformations is to achieve linear relationships with the response variable. 
+
+
+#### Bivariate Analysis 
+```{r, warning=FALSE}
+
+## lets try to spot if theres any relationships between our continous explanatory variables with each other and withour response variable
+forest = data[,c(5:13)]
+scatterplotMatrix(forest)
+
+corrplot(cor(forest), method = "ellipse")
+```
+Based on visualizing scatter plots and corrrelation plots correlation, while there are many outliers all over the plots, something else I found interesting is that:
+There is a positive correlation between DC & DMC, and
+There is a positive correlation between  temp & DMC, and 
+There is a negative correlation between temp & RH
+All the above, suggest that there is probility collinearity involved, and I need to consider the interaction terms as I build my model.
+
+
+
+#########################
+## Initial Modeling
+#########################
+lets first try add all the variables I have now 
+```{r}
+par(mfrow=c(2,2))
+par(mar = c(2,2,2,2))
+# Basic model with all continunous variables included
+full_lm = lm(area ~ day+month+FFMC+DMC+DC+ISI+temp+RH+wind+rain, data = data)
+summary(full_lm)
+# plot(full_lm)
+
+
+# add some interaction terms
+interact <- cbind(data)
+# again the interaction terms I added here are all based on my observations above
+interact$rh_temp <- data$RH*data$temp
+interact$temp_dmc <- data$temp*data$DMC
+interact$isi_ffmc <- data$ISI*data$FFMC
+interact$dmc_dc <- data$DMC*data$DC
+lm_interact <- lm(area ~ day+FFMC+DMC+DC+ISI+temp+RH+wind+rain + rh_temp + temp_dmc+ isi_ffmc + dmc_dc, data = interact)
+summary(lm_interact)
+
+```
+As it is pretty easy to tell, the model fitting is terrible for my original base model, transformed base model, and transformed based model with interaction terms, though R-square did improve a tiny bit. This not necessarily because the model fit is bad, it might also be the predictors that we current have, do not have sufficient information to explain our response variable, which is fire area.   
+
+
+The model fit above really made me thinking, because based on my intuition and common sense, a lot of the FWI indexes and weather variables should have an impact on the area of the fires. And this made me go back to my original univariate and bivariate analysis, so I double checked to see if there's further transformation that I missed or any correlations between variables that I didnt spot in the beginning. 
+
+So I went back to my univariate analysis, I noticed that I have really dont much with my categorical variables yet, and just based on the graphs, I have no ideas how many data points exactly fall into each subcatories. Especially I would assume that when its hotter, there should be more forest fires. Thus, I did a summary of each category. 
+
+```{r}
+# getting a summary count of forest fire over all our categorical data
+summary(data$day)
+summary(data$month)
+summary(data$X)
+summary(data$Y)
+```
+Based on my summary above, I found out that there's more fires in the weekend (fri + sat + sun), and there is significantly more fires in the summer(aug + sep). So I want to categorized them based on weekend vs weekday, and different seasons to see if this added variables can improve my model. 
+
+##### Adding weekend catogory to our dataset 
+```{r}
+# create a column called weekend
+data$weekend <- rep("empty", 517)
+# group friday, saturday, and sunday into weekend within the weekend column
+# group the rest into the weekdays 
+for (i in 1:517){
+  if (data$day[i] %in% c("fri", "sat", "sun")) data$weekend[i] <- "weekend"
+  if (data$day[i] %in% c("mon", "tue", "wed", "thu")) data$weekend[i] <- "weekday"
+}
+data$weekend <- as.factor(data$weekend)
+# get rid of the old explanatory variable so it wont affect our model
+data$day <- NULL
+head(data$weekend)
+# plot it newly created variable in boxplot
+boxplot(area ~ data$weekend, outline  = FALSE, main = "weekend vs. weekday")
+```
+##### Adding season category to my dataset
+```{r}
+# create a new season column
+data$season <- rep("empty", 517)
+# group the data points into their corresponding season based on their month
+for (i in 1:517){
+  if (data$month[i] %in% c("jan", "feb", "dec")) data$season[i] <- "winter"
+  if (data$month[i] %in% c("mar", "apr", "may")) data$season[i] <- "spring"
+  if (data$month[i] %in% c("jun", "jul", "aug")) data$season[i] <- "summer"
+  if (data$month[i] %in% c("sep", "oct", "nov")) data$season[i] <- "fall"
+}
+data$season <- as.factor(data$season)
+# again, get rid of the old data 
+data$month <- NULL
+head(data$season)
+# plot it in boxplot 
+boxplot(area ~ data$season, outline  = FALSE, main = "fire area by seasons")
+```
+Although, both the weekend and season data here dont seem to provide me any extra information about fire area, I still hope to keep it to see it contributes to the model  
+
+##### New model with added variables 
+```{r}
+## lets try building our initial model again with my newly added variables 
+lm_new <- lm(area ~ weekend+season+FFMC+DMC+DC+ISI+temp+RH+wind+rain + RH:temp + FFMC:ISI+ DMC:DC + FFMC:DMC + temp:DMC, data = data)
+summary(lm_new)
+```
+YAY, I see that r-squared has improved significantly, most importantly, I have a F-statistic for the model and I see some variables with very small p-values, which means that their coefficients should not be 0 and they might contribute to explaining our model. And, now I can finally move on to the actual modeling part.   
+
+
+Here is a good place for me to go back to our client's question:
+1.	What are the variables that influence the total burned area in forest fires? 
+2.	What is a good predictive equation for predicting the total burned area in terms of given variables (do you need all of them?)
+
+and really think about how I want to approach these 2 questions. 
+
+The first thing, that came to my mind is that these 2 questions are asking about very different things, though they seem very similar. The first question is asking for inferetial model, while the second questions asks me to predict. 
+
+
+Therefore, after going over what we have been learning in class through out the sememster, I chose ANOVA for my inferential model and stepwise selection for my predictive model, and here are my reasons:
+1. ANOVA measures the relevance of features by their correlation with dependent variable while Stepwise Selection measure the usefulness of a subset of feature by actually training a model on it.  
+2. ANOVA methods might fail to find the best subset of features in many occasions but Stepwise Selection methods can always provide the best subset of predictor features.
+3. Using the subset of features from ANOVA make the model more prone to overfitting, which I absolutely need to avoid for my predictive model, as compared to using subset of features from the Stepwise Selection.
+
+And now LETS START:
+
+### Explanatory Modeling
+Finding the most importatnt variables (or features) that explains major part of variance of the response variable is key to identify and build high performing models.   
+
+#### Anova Approach 
+```{r}
+## I first created a base model with all the independent variables and interaction terms included.
+baseMod <-lm(area ~ weekend+season+FFMC+DMC+DC+ISI+temp+RH+wind+rain + RH:temp + FFMC:ISI+ DMC:DC + FFMC:DMC + temp:DMC, data = data)
+
+## I then set up a model with only intercepts
+null_mod <- lm(area ~ 1, data = data)
+
+## Now I use anova to see whether all the variables and interactions terms I have make sense
+## That is, whether they have enough explanatory power than just using intercept
+anova(baseMod, null_mod)
+```
+Based on my anova test between my full model and my restricted intercept model, I see that the p-value is less then 0.05, which is the normal significance level, thus, the statistic is significant enough that we can reject our null hypothesis and claim that my explanatory variables do have some power in explaining forest fire area. YAY, so now I can continue to select features that actually contribute to the explanation of the data. 
+
+```{r}
+## Here, I will create multiple subsets of my full model
+## And use anova() to check if the additional variable contribute to the explanatory ability of the model. 
+## Below, I have baseMod with all 10 explanatory variables and 4 interaction terms
+## While, mod1 through mod14 contain one predictor less than the previous model 
+
+## With principle or marginality in mind 
+## I first got rid of FFMC:ISI
+mod_1 <- lm(area ~ weekend+season+FFMC+DMC+DC+ISI+temp+RH+wind+rain + RH:temp + DMC:DC + FFMC:DMC + temp:DMC, data = data)
+
+## took off ISI
+mod_2 <- lm(area ~ weekend+season+FFMC+DMC+DC+temp+RH+wind+rain + RH:temp + DMC:DC + FFMC:DMC + temp:DMC, data = data)
+
+## took off DMC:DC
+mod_3 <- lm(area ~  weekend+season+FFMC+DMC+DC+temp+RH+wind+rain + RH:temp  + FFMC:DMC + temp:DMC, data = data)
+
+## took off DC
+mod_4 <- lm(area ~  weekend+season+FFMC+DMC+temp+RH+wind+rain + RH:temp  + FFMC:DMC + temp:DMC, data = data)
+
+## took off RH:temp
+mod_5 <- lm(area ~ weekend+season+FFMC+DMC+temp+RH+wind+rain+ FFMC:DMC + temp:DMC, data = data)
+
+## took off RH
+mod_6 <- lm(area ~ weekend+season+FFMC+DMC+temp+wind+rain + FFMC:DMC + temp:DMC, data = data)
+
+## took off FFMC:DMC
+mod_7 <- lm(area ~ weekend+season+FFMC+DMC+temp+wind+rain + temp:DMC, data = data)
+
+## took off FFMC
+mod_8 <- lm(area ~ weekend+season+DMC+temp+wind+rain + temp:DMC, data = data)
+
+## took off weekend
+mod_9 <- lm(area ~ season+DMC+temp+wind+rain + temp:DMC, data = data)
+
+## took off temp:DMC
+mod_10 <- lm(area ~ season+DMC + temp+wind+rain, data = data)
+
+## took off DMC
+mod_11 <- lm(area ~ season+temp+wind + rain, data = data)
+
+## took off rain
+mod_12 <- lm(area ~ season+temp+wind, data = data)
+
+## took off temp
+mod_13 <- lm(area ~ season+wind, data = data)
+
+## took off wind
+mod_14 <- lm(area ~ season, data = data)
+
+## took off season
+mod_15 <- lm(area ~ 1, data = data)
+
+
+anova(baseMod, mod_1, mod_2, mod_3, mod_4, mod_5, mod_6, mod_7, mod_8, mod_9, mod_10,mod_11, mod_12, mod_13, mod_14, mod_15)
+
+```
+I know I built a lot of models here. The reason why I am doing this is because I want to be extra careful when I am dealing with explanatory models, as it cares a lot about minimizing bias as to where predictive models want to minimize variance. For every variable that I decide to eliminate, I need to have solid evidence to show that this variable indeed doesnt contribute to the model. And this is basically why I decided to check it one by one.   
+
+With the anova chart R produced above, I noticed that DMC:DC, DMC, temp, wind, season, all have p-values way below the significance level of 0.05 or close to it. This basically means, that there's sufficient evidence that we need rejust the null for this variables that their coefficient is not equal to 0 and they contribute to the model. Another thing to pay attention to is that, I also need to think about principle of marginality since there is an interaction term DMC:DC involved, I only have DMC here, so I also need to include DC. This won't really affect the accuracy of my model that much, as this is my model here is for explaining the data, it doesnt penalize if I have too many variables, as long as it has something to contribute to the model.   
+
+To summarize, here I have answered the first question of my client, that is which variables can influence the total burned area in the forest. Based on my analysis those variables are: Temperature, Wind, Season, DMC, DC and DMC:DC. Later in this report I will also validate this answer.    
+
+
+
+### Predictive Modeling 
+
+#### Step-wise Regression
+Again, I picked step-wise regression (also since Professor recommended not to use LASSO and Ridge ahaha) because this can be a very effective method since I want to:   
+  1) be highly selective about discarding valuable predictor variables  
+  2) build multiple models on the response variable for later validation  
+```{r}
+# base intercept only model
+base.mod <- lm(area ~ 1, data = data)
+# full model with all predictors
+all.mod <- lm(area ~ weekend+season+FFMC+DMC+DC+ISI+temp+RH+wind+rain + RH:temp + FFMC:ISI+ DMC:DC + FFMC:DMC + temp:DMC, data = data) 
+# perform step-wise algorithm
+stepMod <- step(base.mod, scope = list(lower = base.mod, upper = all.mod), direction = "both", trace = 0, steps = 1000) 
+# get the shortlisted variable
+shortlistedVars <- names(unlist(stepMod[[1]]))
+# remove intercept
+shortlistedVars <- shortlistedVars[!shortlistedVars %in% "(Intercept)"]
+# lets see what variables got picked from this method 
+print(shortlistedVars)
+
+# summary 
+summary(stepMod)
+
+# lets see their coefficients and other statistics 
+step(stepMod)
+
+lm.final <- stepMod
+
+```
+Stepwise Seletion, similarly suggests that I includ season, DMC, temperature and wind in my predictiv model, and a descent AIC score of 340. 
+
+#########################
+## Model Diagnostics 
+#########################
+
+#### Basic Assumptions:
+#### 1. Error Assumtions:  
+1) Independence: this is pretter hard to measure 
+2) Homoscedasticity - Constant Variance: check if residuals are independent of y, I plot the errors against the fitted value y-hat. I expect to see a relatively constant spread of points centered around 0
+3) Normality: Q-Q plot
+
+#### 2. Structure of the Model: Linearity 
+I will check the relationship between my explanatory variables and my response variable. I have to make sure that there is no obvious nonlinearity that would invalidate my model, which might require me further transformation. And to visualize these relationships, I will use partial residual plot, one for each explanatory variable    
+
+##### 1) Independence
+```{r}
+## Independence  
+resid = lm.final$residuals
+## plot residuals against any spatial variables present 
+plot(data$X, resid)
+```
+Plotted residuals against the spatial data I have, and the dots look pretty random to me, which indicates that the independence criteria is met. I used this plot because dependence on spatial varaiables are common source of lack of independence. 
+
+
+##### 2) Homoscedasticity
+```{r}
+## Homoscedasticity 
+resid = lm.final$residuals
+fitted = lm.final$fitted.values
+plot(fitted, resid, main = "fitted vs. residuals")
+```
+Indeed, I see a mostly constant spread of residuals centered around 0. Most residuals are in the range of -2 to 4 (with an exception of the line in the bottom, which I assume to be the result of my transformation). Thus, I think this is sufficient for me to assume that the requirement of homoscedasticity is fulfilled 
+
+##### 3) Normality
+```{r}
+## Normality - QQ plot
+qqnorm(resid)
+
+#qqline(resid)
+```
+For the most part, the residuals are somewhat close to a straight line as desired, though, there is still some points that deviated a little from th QQ line, I think this is enough to conclude that errors are normally distributed
+
+
+
+##### 4) Linearity
+```{r}
+par(mfrow=c(2,2))
+par(mar = c(2,2,2,2))
+## Linearity - partial residual plots
+prplot(lm.final, 1)
+prplot(lm.final, 2)
+prplot(lm.final, 3)
+prplot(lm.final, 4)
+```
+Finally, I check the structure of my explanatory varialbles relationship with the response and make sure there is no obvious nonlinearity that would invalidate my model. To do this, I drew partial residual plot for each explanatory varialbe. Just by looking at the scatter plots, the correlation seems pretty weak since we have season as our categorical variable in the regression. 
+
+
+
+#### Outliers/Leverage Points/Influential Points
+1) Outliers - Studentized residuals  
+2) Leverage Points - Mahalanobis Distance  
+3) Influential Points - Cook's Distance  
+
+##### 1) Outliers
+
+```{r}
+## Outliers 
+## Need to check particularly for outliers that are influential
+## To do this, I calucate studentized residuals and perform a Bonferroni-corrected hypothesis test on them.
+outlierTest(lm.final, cutoff = 0.05)
+```
+From the chart, I see the p-value is 0.0271, so I should reject the hypothesis that is some of the points are influential outliers. My largest studentized residual point is 239: 4.08 which correspond to a Bonferonni p-value of 0.0271.This studentized residual test demonstrates that this point does in some way skew my regression plane enough to be classified as a problematic influential outlier.
+
+
+##### 2) Leverage Points
+```{r}
+## Leverage Points 
+hat = lm.influence(lm.final)$hat
+halfnorm(hat, main = "leverage points")
+tail(sort(hat))
+```
+As it is pretty easy to see in the half-norm plot and the hat matrix, data points 412, 466, 380 have the highest leverages. 
+
+
+##### 3) Influential Points
+```{r}
+## Influential Points
+## Here, I will use Coook's distance to find points with large distance values 
+## Meaning that the coefficients of my regression would change significantly
+## If i was to remove this point 
+hat.root = sqrt(1 - hat)
+n = nrow(data)
+k = 4
+se = sqrt(sum(resid ^ 2) / (n - k - 1))
+sigma.stdized = resid / (hat.root * se )
+cook.dist = (sigma.stdized^2 / (k + 1)) * (hat / (1 - hat))
+tail(sort(cook.dist))
+```
+416 is most influential according to Cook's distance. It is interesting to find out that point 239 which is also my outlier, also appears here as the third highest influential point. 
+
+
+
+##### Violations? Transformations?
+As I would already expect from my univariate and multivariate analysis from the beginning, there are many outliers, leverage points and influential points detected through model diagnostics, and many of them overlapped too. This means that I need to consider whether I want to include these observations in the final model, which might depend on various factors and require me to take an even closer look at those specific data points to see if the errors are just an input error. 
+
+
+
+
+#########################
+## Model Evaluation
+#########################
+Model evaluation for explanatory model 
+```{r}
+# fit my explanatory model 
+explain <- lm(area ~ DMC + DC + DMC:DC + temp + wind + season, data = data)
+
+# function for roo meak squared error 
+rmse <- function(error) {sqrt(mean(error ^ 2))}
+rmse(explain$residuals)
+```
+
+For model evaluation for my predictive model, I decided to use K(10) fold cross validation to estimate my predictive model error.
+Cross Validation involves partitioning the data into an explicit training dataset used to prepare the model and an unseen test dataset used to evaluate the models performance un unseen data.
+Below, I used cross validation that I partitioned the forest fires into 10 sub dataset so that some is used for traning and the rest used for validating the model accuracy.
+```{r, eval=FALSE}
+# define training control
+train_control <- trainControl(method = "cv", number = 10)
+
+# train the model 
+cv_mod <- train(area ~ DMC + temp + wind + season, data = data, trControl = train_control, method = "lmStepAIC")
+
+```
+and now with cross validation it train the data  based on my intial predictive model, which resulted in many combinations of variables. And based on the biggest AIC, I can go ahead and pick the best model. Also, AIC is used here before it can reflect the bias and variance trade-off, as it is very sensitive in preditive models. We want to contrain the number of total predictors without hurting the model accuracy too much. 
+
+#########################
+## Final Model Inference
+#########################
+
+Overall, it was fun exploring this challenging dataset. I like how there are 2 different aspects to building the models for different use. For my explanatory model, temperature, wind, season, DMC, DMC:DC, DC resulted in relatively accurate goodness of fit, meaning that they do have a somewhat strong explanatory power on the burned area. On the other, I wish I had more time to play with the predictive model, as in the end, I did detect many influential points and outliers that seem like they need to be eliminate from the model for a higher accuracy, and also the linearity assumption was not met by my current model, in that sense, I also need ot go back and transform some independent variable and repeat all these steps until all my assumptions are somewhat met. 
+
+
+
+
+
+
+
